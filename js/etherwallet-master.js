@@ -16389,19 +16389,19 @@ function $LogProvider() {
    * @ngdoc method
    * @name $logProvider#debugEnabled
    * @description
-   * @param {boolean=} flag Enable or disable debug level messages
-   * @returns {*} Current value if used as getter, or itself (chaining) if used as setter
+   * Enables or disables debug level messages
+   * @param {boolean=} flag Enable or disable debug logging
+   * @returns {*} Current debug value or provider instance for chaining
    */
-  this.debugEnabled = function (flag) {
+  this.debugEnabled = function(flag) {
     if (isDefined(flag)) {
       debug = flag;
       return this;
-    } else {
-      return debug;
     }
+    return debug;
   };
 
-  this.$get = ['$window', function ($window) {
+  this.$get = ['$window', function($window) {
     var console = $window.console || {};
 
     function formatError(arg) {
@@ -16423,16 +16423,19 @@ function $LogProvider() {
 
       try {
         hasApply = !!logFn.apply;
-      } catch (e) { /* IE11 quirks */ }
+      } catch (e) {
+        hasApply = false;
+      }
 
       if (hasApply) {
-        return function () {
+        return function() {
           var args = Array.prototype.map.call(arguments, formatError);
           return logFn.apply(console, args);
         };
       }
 
-      return function (arg1, arg2) {
+      // IE fallback: log at least the first two arguments
+      return function(arg1, arg2) {
         logFn(arg1, arg2 != null ? arg2 : '');
       };
     }
@@ -16442,7 +16445,7 @@ function $LogProvider() {
       info: consoleLog('info'),
       warn: consoleLog('warn'),
       error: consoleLog('error'),
-      debug: function () {
+      debug: function() {
         if (debug) {
           consoleLog('debug').apply(null, arguments);
         }
@@ -16451,7 +16454,7 @@ function $LogProvider() {
   }];
 }
 
-// Utility functions (provide these if not using AngularJS core)
+// Utility functions (define these if not already available in your AngularJS app)
 function isDefined(value) {
   return typeof value !== 'undefined';
 }
@@ -16459,7 +16462,7 @@ function isDefined(value) {
 function noop() {}
 
 function forEach(obj, iterator) {
-  if (Array.isArray(obj)) {
+  if (typeof obj.forEach === 'function') {
     obj.forEach(iterator);
   } else {
     for (var key in obj) {
