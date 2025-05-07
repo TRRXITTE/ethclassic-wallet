@@ -58205,6 +58205,18 @@ var N_DIV_2 = new BN('7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f4668
  * @prop {Buffer} r EC signature parameter
  * @prop {Buffer} s EC recovery ID
  */
+function normalizeV(v) {
+  if (Buffer.isBuffer(v)) {
+    return v.length === 1 ? v : v.slice(0, 1); // Ensure only 1 byte
+  } else if (typeof v === 'string') {
+    if (v.length > 2) {  // If it's a string, ensure it's at most 2 characters (i.e., 1 byte)
+      v = v.slice(-2); // Take the last 2 characters (1 byte in hex)
+    }
+    return Buffer.from(v, 'hex');
+  }
+  return Buffer.from([0x1c]); // Default value if something goes wrong
+}
+
 module.exports = function () {
   function Transaction(data) {
     _classCallCheck(this, Transaction);
@@ -58258,22 +58270,11 @@ module.exports = function () {
       default: new Buffer([])
     }];
 
-    /**
-     * Returns the rlp encoding of the transaction
-     * @method serialize
-     * @return {Buffer}
-     */
+    // Normalize v field before use
+    this.v = normalizeV(data.v || this.v);
+
     // attached serialize
     ethUtil.defineProperties(this, fields, data);
-
-    /**
-     * @prop {Buffer} from (read only) sender address of this transaction, mathematically derived from other parameters.
-     */
-    Object.defineProperty(this, 'from', {
-      enumerable: true,
-      configurable: true,
-      get: this.getSenderAddress.bind(this)
-    });
 
     // calculate chainId from signature
     var sigV = ethUtil.bufferToInt(this.v);
@@ -58284,6 +58285,7 @@ module.exports = function () {
     this._chainId = chainId || data.chainId || 0;
     this._homestead = true;
   }
+
 
   /**
    * If the tx's `to` is to the creation address
