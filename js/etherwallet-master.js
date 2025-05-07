@@ -71,243 +71,243 @@ ajaxReq.getBalance = function(addr, callback) {
  * Retains fixes for chainId (0xb1e9), transaction value normalization, and price feed
  */
 ajaxReq.getTransactionData = function(addr, callback) {
-  var response = { error: false, msg: '', data: { address: addr, balance: '', gasprice: '', nonce: '' } };
-  if (!addr || !/^0x[0-9a-fA-F]{40}$/.test(addr)) {
-      console.error('getTransactionData: Invalid address format', addr);
-      callback({ error: true, msg: 'Invalid address: Must be 40-character hex string', data: '' });
-      return;
-  }
-  var reqObj = [
-      { "id": 135, "jsonrpc": "2.0", "method": "eth_getBalance", "params": [addr, 'latest'] },
-      { "id": 136, "jsonrpc": "2.0", "method": "eth_gasPrice", "params": [] },
-      { "id": 137, "jsonrpc": "2.0", "method": "eth_getTransactionCount", "params": [addr, 'latest'] }
-  ];
-  var config = { headers: { 'Content-Type': 'application/json' } };
-  console.log('getTransactionData request:', { url: this.SERVERURL, data: reqObj });
-  this.http.post(this.SERVERURL, JSON.stringify(reqObj), config).then(function(resp) {
-      console.log('getTransactionData raw response:', JSON.stringify(resp, null, 2));
-      var data = resp.data;
-      if (!Array.isArray(data) || data.length !== 3) {
-          console.error('getTransactionData: Invalid response format', data);
-          callback({ error: true, msg: 'Invalid RPC response: Expected 3 results', data: '' });
-          return;
-      }
-      for (var i in data) {
-          if (data[i].error) {
-              console.error('getTransactionData: RPC error for index', i, data[i].error);
-              callback({ error: true, msg: data[i].error.message || 'RPC method failed', data: '' });
-              return;
-          }
-          if (!data[i].result || typeof data[i].result !== 'string' || !/^0x[0-9a-fA-F]*$/.test(data[i].result)) {
-              console.error('getTransactionData: Invalid result for index', i, data[i]);
-              callback({ error: true, msg: 'RPC method failed: Invalid or missing result', data: '' });
-              return;
-          }
-      }
-      try {
-          response.data.balance = new BigNumber(data[0].result).toString(10);
-          response.data.gasprice = data[1].result;
-          response.data.nonce = data[2].result;
-          callback(response);
-      } catch (e) {
-          console.error('getTransactionData parsing error:', e);
-          callback({ error: true, msg: 'Error parsing RPC results: ' + e.message, data: '' });
-      }
-  }, function(err) {
-      console.error('getTransactionData error:', err);
-      var msg = err.status === 415 ? 'Unsupported Media Type: Ensure Content-Type is application/json' :
-                err.status ? `HTTP error ${err.status}: ${err.statusText}` : 'Connection error: Unable to reach RPC';
-      callback({ error: true, msg: msg, data: '' });
-  });
+    var response = { error: false, msg: '', data: { address: addr, balance: '', gasprice: '', nonce: '' } };
+    if (!addr || !/^0x[0-9a-fA-F]{40}$/.test(addr)) {
+        console.error('getTransactionData: Invalid address format', addr);
+        callback({ error: true, msg: 'Invalid address: Must be 40-character hex string', data: '' });
+        return;
+    }
+    var reqObj = [
+        { "id": 135, "jsonrpc": "2.0", "method": "eth_getBalance", "params": [addr, 'latest'] },
+        { "id": 136, "jsonrpc": "2.0", "method": "eth_gasPrice", "params": [] },
+        { "id": 137, "jsonrpc": "2.0", "method": "eth_getTransactionCount", "params": [addr, 'latest'] }
+    ];
+    var config = { headers: { 'Content-Type': 'application/json' } };
+    console.log('getTransactionData request:', { url: this.SERVERURL, data: reqObj });
+    this.http.post(this.SERVERURL, JSON.stringify(reqObj), config).then(function(resp) {
+        console.log('getTransactionData raw response:', JSON.stringify(resp, null, 2));
+        var data = resp.data;
+        if (!Array.isArray(data) || data.length !== 3) {
+            console.error('getTransactionData: Invalid response format', data);
+            callback({ error: true, msg: 'Invalid RPC response: Expected 3 results', data: '' });
+            return;
+        }
+        for (var i in data) {
+            if (data[i].error) {
+                console.error('getTransactionData: RPC error for index', i, data[i].error);
+                callback({ error: true, msg: data[i].error.message || 'RPC method failed', data: '' });
+                return;
+            }
+            if (!data[i].result || typeof data[i].result !== 'string' || !/^0x[0-9a-fA-F]*$/.test(data[i].result)) {
+                console.error('getTransactionData: Invalid result for index', i, data[i]);
+                callback({ error: true, msg: 'RPC method failed: Invalid or missing result', data: '' });
+                return;
+            }
+        }
+        try {
+            response.data.balance = new BigNumber(data[0].result).toString(10);
+            response.data.gasprice = data[1].result;
+            response.data.nonce = data[2].result;
+            callback(response);
+        } catch (e) {
+            console.error('getTransactionData parsing error:', e);
+            callback({ error: true, msg: 'Error parsing RPC results: ' + e.message, data: '' });
+        }
+    }, function(err) {
+        console.error('getTransactionData error:', err);
+        var msg = err.status === 415 ? 'Unsupported Media Type: Ensure Content-Type is application/json' :
+                  err.status ? `HTTP error ${err.status}: ${err.statusText}` : 'Connection error: Unable to reach RPC';
+        callback({ error: true, msg: msg, data: '' });
+    });
 };
 
 ajaxReq.sendRawTx = function(rawTx, callback) {
-  var config = { headers: { 'Content-Type': 'application/json' } };
-  // Validate rawTx format
-  if (!rawTx || !/^0x[0-9a-fA-F]+$/.test(rawTx)) {
-      console.error('sendRawTx: Invalid rawTx format', rawTx);
-      callback({ error: true, msg: 'Invalid raw transaction: Must be hex string', data: '' });
-      return;
-  }
-  // Attempt to decode rawTx for debugging (simplified, assumes Buffer and ethereumjs-tx-like parsing)
-  try {
-      // Note: This requires ethereumjs-tx or a similar library. If not available, log rawTx only.
-      // For browser, you may need to include ethereumjs-tx via a script tag or parse manually.
-      console.log('sendRawTx: Attempting to decode rawTx', rawTx);
-      // Placeholder for decoding (requires library or custom parsing)
-      // Example with ethereumjs-tx (Node.js context):
-      // const { Transaction } = require('ethereumjs-tx');
-      // const tx = new Transaction(rawTx, { chain: 'mainnet' });
-      // console.log('Decoded v:', tx.v.toString('hex'));
-      // console.log('Decoded r:', tx.r.toString('hex'));
-      // console.log('Decoded s:', tx.s.toString('hex'));
-  } catch (e) {
-      console.error('sendRawTx: Failed to decode rawTx', e);
-  }
-  console.log('sendRawTx request:', { method: 'eth_sendRawTransaction', params: [rawTx] });
-  this.post({
-      "method": "eth_sendRawTransaction",
-      "params": [rawTx]
-  }, function(resp) {
-      console.log('sendRawTx response:', JSON.stringify(resp, null, 2));
-      if (resp.error) {
-          console.error('sendRawTx error:', resp.error);
-          callback({ error: true, msg: resp.error.message || 'Failed to send transaction', data: '' });
-      } else {
-          callback({ error: false, data: resp.data.result });
-      }
-  }, config);
+    var config = { headers: { 'Content-Type': 'application/json' } };
+    // Validate rawTx format
+    if (!rawTx || !/^0x[0-9a-fA-F]+$/.test(rawTx)) {
+        console.error('sendRawTx: Invalid rawTx format', rawTx);
+        callback({ error: true, msg: 'Invalid raw transaction: Must be hex string', data: '' });
+        return;
+    }
+    // Attempt to decode rawTx for debugging (simplified, assumes Buffer and ethereumjs-tx-like parsing)
+    try {
+        // Note: This requires ethereumjs-tx or a similar library. If not available, log rawTx only.
+        // For browser, you may need to include ethereumjs-tx via a script tag or parse manually.
+        console.log('sendRawTx: Attempting to decode rawTx', rawTx);
+        // Placeholder for decoding (requires library or custom parsing)
+        // Example with ethereumjs-tx (Node.js context):
+        // const { Transaction } = require('ethereumjs-tx');
+        // const tx = new Transaction(rawTx, { chain: 'mainnet' });
+        // console.log('Decoded v:', tx.v.toString('hex'));
+        // console.log('Decoded r:', tx.r.toString('hex'));
+        // console.log('Decoded s:', tx.s.toString('hex'));
+    } catch (e) {
+        console.error('sendRawTx: Failed to decode rawTx', e);
+    }
+    console.log('sendRawTx request:', { method: 'eth_sendRawTransaction', params: [rawTx] });
+    this.post({
+        "method": "eth_sendRawTransaction",
+        "params": [rawTx]
+    }, function(resp) {
+        console.log('sendRawTx response:', JSON.stringify(resp, null, 2));
+        if (resp.error) {
+            console.error('sendRawTx error:', resp.error);
+            callback({ error: true, msg: resp.error.message || 'Failed to send transaction', data: '' });
+        } else {
+            callback({ error: false, data: resp.data.result });
+        }
+    }, config);
 };
 
 ajaxReq.getEstimatedGas = function(txobj, callback) {
-  txobj.chainId = '0xb1e9'; // TRRXITTE chainId (45577)
-  if (txobj.value && typeof txobj.value === 'string' && txobj.value.startsWith('0x')) {
-      txobj.value = '0x' + parseInt(txobj.value, 16).toString(16);
-  }
-  var config = { headers: { 'Content-Type': 'application/json' } };
-  console.log('getEstimatedGas request:', { method: 'eth_estimateGas', params: [txobj] });
-  this.post({
-      "method": "eth_estimateGas",
-      "params": [txobj]
-  }, function(resp) {
-      console.log('getEstimatedGas response:', JSON.stringify(resp, null, 2));
-      if (resp.error) {
-          callback({ error: true, msg: resp.error.message || 'Failed to estimate gas', data: '' });
-      } else {
-          callback({ error: false, data: resp.data.result });
-      }
-  }, config);
+    txobj.chainId = '0xb1e9'; // TRRXITTE chainId (45577)
+    if (txobj.value && typeof txobj.value === 'string' && txobj.value.startsWith('0x')) {
+        txobj.value = '0x' + parseInt(txobj.value, 16).toString(16);
+    }
+    var config = { headers: { 'Content-Type': 'application/json' } };
+    console.log('getEstimatedGas request:', { method: 'eth_estimateGas', params: [txobj] });
+    this.post({
+        "method": "eth_estimateGas",
+        "params": [txobj]
+    }, function(resp) {
+        console.log('getEstimatedGas response:', JSON.stringify(resp, null, 2));
+        if (resp.error) {
+            callback({ error: true, msg: resp.error.message || 'Failed to estimate gas', data: '' });
+        } else {
+            callback({ error: false, data: resp.data.result });
+        }
+    }, config);
 };
 
 ajaxReq.getEthCall = function(txobj, callback) {
-  txobj.chainId = '0xb1e9'; // TRRXITTE chainId (45577)
-  if (txobj.value && typeof txobj.value === 'string' && txobj.value.startsWith('0x')) {
-      txobj.value = '0x' + parseInt(txobj.value, 16).toString(16);
-  }
-  var config = { headers: { 'Content-Type': 'application/json' } };
-  console.log('getEthCall request:', { method: 'eth_call', params: [txobj, 'latest'] });
-  this.post({
-      "method": "eth_call",
-      "params": [txobj, 'latest']
-  }, function(resp) {
-      console.log('getEthCall response:', JSON.stringify(resp, null, 2));
-      if (resp.error) {
-          callback({ error: true, msg: resp.error.message || 'Failed to execute eth_call', data: '' });
-      } else {
-          callback({ error: false, data: resp.data.result });
-      }
-  }, config);
+    txobj.chainId = '0xb1e9'; // TRRXITTE chainId (45577)
+    if (txobj.value && typeof txobj.value === 'string' && txobj.value.startsWith('0x')) {
+        txobj.value = '0x' + parseInt(txobj.value, 16).toString(16);
+    }
+    var config = { headers: { 'Content-Type': 'application/json' } };
+    console.log('getEthCall request:', { method: 'eth_call', params: [txobj, 'latest'] });
+    this.post({
+        "method": "eth_call",
+        "params": [txobj, 'latest']
+    }, function(resp) {
+        console.log('getEthCall response:', JSON.stringify(resp, null, 2));
+        if (resp.error) {
+            callback({ error: true, msg: resp.error.message || 'Failed to execute eth_call', data: '' });
+        } else {
+            callback({ error: false, data: resp.data.result });
+        }
+    }, config);
 };
 
 ajaxReq.getTraceCall = function(txobj, callback) {
-  txobj.chainId = '0xb1e9'; // TRRXITTE chainId (45577)
-  if (txobj.value && typeof txobj.value === 'string' && txobj.value.startsWith('0x')) {
-      txobj.value = '0x' + parseInt(txobj.value, 16).toString(16);
-  }
-  var result = { output: null, gasUsed: null, error: null };
-  var config = { headers: { 'Content-Type': 'application/json' } };
+    txobj.chainId = '0xb1e9'; // TRRXITTE chainId (45577)
+    if (txobj.value && typeof txobj.value === 'string' && txobj.value.startsWith('0x')) {
+        txobj.value = '0x' + parseInt(txobj.value, 16).toString(16);
+    }
+    var result = { output: null, gasUsed: null, error: null };
+    var config = { headers: { 'Content-Type': 'application/json' } };
 
-  this.post({
-      "method": "eth_call",
-      "params": [txobj, "latest"]
-  }, function(callResp) {
-      if (callResp.error) {
-          callback({
-              error: true,
-              msg: callResp.error.message || 'Failed to simulate transaction with eth_call',
-              data: {}
-          });
-          return;
-      }
-      result.output = callResp.data.result;
+    this.post({
+        "method": "eth_call",
+        "params": [txobj, "latest"]
+    }, function(callResp) {
+        if (callResp.error) {
+            callback({
+                error: true,
+                msg: callResp.error.message || 'Failed to simulate transaction with eth_call',
+                data: {}
+            });
+            return;
+        }
+        result.output = callResp.data.result;
 
-      ajaxReq.post({
-          "method": "eth_estimateGas",
-          "params": [txobj]
-      }, function(gasResp) {
-          if (gasResp.error) {
-              result.error = gasResp.error.message || 'Failed to estimate gas';
-          } else {
-              result.gasUsed = gasResp.data.result;
-          }
+        ajaxReq.post({
+            "method": "eth_estimateGas",
+            "params": [txobj]
+        }, function(gasResp) {
+            if (gasResp.error) {
+                result.error = gasResp.error.message || 'Failed to estimate gas';
+            } else {
+                result.gasUsed = gasResp.data.result;
+            }
 
-          callback({
-              error: result.error !== null,
-              msg: result.error || 'Simulated transaction successfully',
-              data: {
-                  output: result.output,
-                  gasUsed: result.gasUsed,
-                  stateDiff: null,
-                  trace: null,
-                  vmTrace: null
-              }
-          });
-      }, config);
-  }, config);
+            callback({
+                error: result.error !== null,
+                msg: result.error || 'Simulated transaction successfully',
+                data: {
+                    output: result.output,
+                    gasUsed: result.gasUsed,
+                    stateDiff: null,
+                    trace: null,
+                    vmTrace: null
+                }
+            });
+        }, config);
+    }, config);
 };
 
 ajaxReq.queuePost = function() {
-  var data = this.pendingPosts[0].data;
-  var callback = this.pendingPosts[0].callback;
-  var config = this.pendingPosts[0].config || {
-      headers: { 'Content-Type': 'application/json' }
-  };
-  console.log('queuePost request:', { url: this.SERVERURL, data: data });
-  this.http.post(this.SERVERURL, JSON.stringify(data), config).then(function(resp) {
-      console.log('queuePost response:', JSON.stringify(resp, null, 2));
-      callback(resp);
-      ajaxReq.pendingPosts.splice(0, 1);
-      if (ajaxReq.pendingPosts.length > 0) {
-          ajaxReq.queuePost();
-      }
-  }, function(err) {
-      console.error('queuePost error:', err);
-      var msg = err.status === 415 ? 'Unsupported Media Type: Ensure Content-Type is application/json' :
-                err.status ? `HTTP error ${err.status}: ${err.statusText}` : 'Connection error: Unable to reach RPC';
-      callback({ error: true, msg: msg, data: '' });
-      ajaxReq.pendingPosts.splice(0, 1);
-      if (ajaxReq.pendingPosts.length > 0) {
-          ajaxReq.queuePost();
-      }
-  });
+    var data = this.pendingPosts[0].data;
+    var callback = this.pendingPosts[0].callback;
+    var config = this.pendingPosts[0].config || {
+        headers: { 'Content-Type': 'application/json' }
+    };
+    console.log('queuePost request:', { url: this.SERVERURL, data: data });
+    this.http.post(this.SERVERURL, JSON.stringify(data), config).then(function(resp) {
+        console.log('queuePost response:', JSON.stringify(resp, null, 2));
+        callback(resp);
+        ajaxReq.pendingPosts.splice(0, 1);
+        if (ajaxReq.pendingPosts.length > 0) {
+            ajaxReq.queuePost();
+        }
+    }, function(err) {
+        console.error('queuePost error:', err);
+        var msg = err.status === 415 ? 'Unsupported Media Type: Ensure Content-Type is application/json' :
+                  err.status ? `HTTP error ${err.status}: ${err.statusText}` : 'Connection error: Unable to reach RPC';
+        callback({ error: true, msg: msg, data: '' });
+        ajaxReq.pendingPosts.splice(0, 1);
+        if (ajaxReq.pendingPosts.length > 0) {
+            ajaxReq.queuePost();
+        }
+    });
 };
 
 ajaxReq.post = function(data, callback, config) {
-  data.id = Math.floor(Math.random() * 10000) + 100;
-  data.jsonrpc = "2.0";
-  this.pendingPosts.push({
-      data: data,
-      callback: callback,
-      config: config || {
-          headers: { 'Content-Type': 'application/json' }
-      }
-  });
-  if (this.pendingPosts.length === 1) {
-      this.queuePost();
-  }
+    data.id = Math.floor(Math.random() * 10000) + 100;
+    data.jsonrpc = "2.0";
+    this.pendingPosts.push({
+        data: data,
+        callback: callback,
+        config: config || {
+            headers: { 'Content-Type': 'application/json' }
+        }
+    });
+    if (this.pendingPosts.length === 1) {
+        this.queuePost();
+    }
 };
 
 ajaxReq.getETHvalue = function(callback) {
-  var url = 'https://api.trrxitte.com/price/etx'; // Replace with actual TRRXITTE price feed
-  console.log('getETHvalue request:', url);
-  this.http.get(url).then(function(data) {
-      console.log('getETHvalue response:', data);
-      var priceData = data['data'] && data['data']['price'] ? data['data']['price'] : null;
-      if (!priceData) {
-          console.error('getETHvalue: Invalid price data', data);
-          callback({ error: true, msg: 'Invalid price feed response', data: { usd: '0.000000', eur: '0.000000', btc: '0.000000' } });
-          return;
-      }
-      var priceObj = {
-          usd: parseFloat(priceData['usd'] || 0).toFixed(6),
-          eur: parseFloat(priceData['eur'] || 0).toFixed(6),
-          btc: parseFloat(priceData['btc'] || 0).toFixed(6)
-      };
-      callback({ error: false, data: priceObj });
-  }, function(err) {
-      console.error('getETHvalue error:', err);
-      callback({ error: true, msg: 'Failed to fetch ETX price (update with valid TRRXITTE price feed)', data: { usd: '0.000000', eur: '0.000000', btc: '0.000000' } });
-  });
+    var url = 'https://api.trrxitte.com/price/etx'; // Replace with actual TRRXITTE price feed
+    console.log('getETHvalue request:', url);
+    this.http.get(url).then(function(data) {
+        console.log('getETHvalue response:', data);
+        var priceData = data['data'] && data['data']['price'] ? data['data']['price'] : null;
+        if (!priceData) {
+            console.error('getETHvalue: Invalid price data', data);
+            callback({ error: true, msg: 'Invalid price feed response', data: { usd: '0.000000', eur: '0.000000', btc: '0.000000' } });
+            return;
+        }
+        var priceObj = {
+            usd: parseFloat(priceData['usd'] || 0).toFixed(6),
+            eur: parseFloat(priceData['eur'] || 0).toFixed(6),
+            btc: parseFloat(priceData['btc'] || 0).toFixed(6)
+        };
+        callback({ error: false, data: priceObj });
+    }, function(err) {
+        console.error('getETHvalue error:', err);
+        callback({ error: true, msg: 'Failed to fetch ETX price (update with valid TRRXITTE price feed)', data: { usd: '0.000000', eur: '0.000000', btc: '0.000000' } });
+    });
 };
 
 module.exports = ajaxReq;
@@ -16383,96 +16383,123 @@ function $LocationProvider() {
  * Use the `$logProvider` to configure how the application logs messages
  */
 function $LogProvider() {
-  var debug = true;
+  var debug = true,
+      self = this;
 
   /**
    * @ngdoc method
    * @name $logProvider#debugEnabled
    * @description
-   * Enables or disables debug level messages
-   * @param {boolean=} flag Enable or disable debug logging
-   * @returns {*} Current debug value or provider instance for chaining
+   * @param {boolean=} flag enable or disable debug level messages
+   * @returns {*} current value if used as getter or itself (chaining) if used as setter
    */
   this.debugEnabled = function(flag) {
     if (isDefined(flag)) {
       debug = flag;
-      return this;
+    return this;
+    } else {
+      return debug;
     }
-    return debug;
   };
 
   this.$get = ['$window', function($window) {
-    var console = $window.console || {};
+    return {
+      /**
+       * @ngdoc method
+       * @name $log#log
+       *
+       * @description
+       * Write a log message
+       */
+      log: consoleLog('log'),
+
+      /**
+       * @ngdoc method
+       * @name $log#info
+       *
+       * @description
+       * Write an information message
+       */
+      info: consoleLog('info'),
+
+      /**
+       * @ngdoc method
+       * @name $log#warn
+       *
+       * @description
+       * Write a warning message
+       */
+      warn: consoleLog('warn'),
+
+      /**
+       * @ngdoc method
+       * @name $log#error
+       *
+       * @description
+       * Write an error message
+       */
+      error: consoleLog('error'),
+
+      /**
+       * @ngdoc method
+       * @name $log#debug
+       *
+       * @description
+       * Write a debug message
+       */
+      debug: (function() {
+        var fn = consoleLog('debug');
+
+        return function() {
+          if (debug) {
+            fn.apply(self, arguments);
+          }
+        };
+      }())
+    };
 
     function formatError(arg) {
       if (arg instanceof Error) {
         if (arg.stack) {
-          return (arg.message && arg.stack.indexOf(arg.message) === -1)
-            ? 'Error: ' + arg.message + '\n' + arg.stack
-            : arg.stack;
+          arg = (arg.message && arg.stack.indexOf(arg.message) === -1)
+              ? 'Error: ' + arg.message + '\n' + arg.stack
+              : arg.stack;
         } else if (arg.sourceURL) {
-          return arg.message + '\n' + arg.sourceURL + ':' + arg.line;
+          arg = arg.message + '\n' + arg.sourceURL + ':' + arg.line;
         }
       }
       return arg;
     }
 
     function consoleLog(type) {
-      var logFn = console[type] || console.log || noop;
-      var hasApply = false;
+      var console = $window.console || {},
+          logFn = console[type] || console.log || noop,
+          hasApply = false;
 
+      // Note: reading logFn.apply throws an error in IE11 in IE8 document mode.
+      // The reason behind this is that console.log has type "object" in IE8...
       try {
         hasApply = !!logFn.apply;
-      } catch (e) {
-        hasApply = false;
-      }
+      } catch (e) {}
 
       if (hasApply) {
         return function() {
-          var args = Array.prototype.map.call(arguments, formatError);
+          var args = [];
+          forEach(arguments, function(arg) {
+            args.push(formatError(arg));
+          });
           return logFn.apply(console, args);
         };
       }
 
-      // IE fallback: log at least the first two arguments
+      // we are IE which either doesn't have window.console => this is noop and we do nothing,
+      // or we are IE where console.log doesn't have apply so we log at least first 2 args
       return function(arg1, arg2) {
-        logFn(arg1, arg2 != null ? arg2 : '');
+        logFn(arg1, arg2 == null ? '' : arg2);
       };
     }
-
-    return {
-      log: consoleLog('log'),
-      info: consoleLog('info'),
-      warn: consoleLog('warn'),
-      error: consoleLog('error'),
-      debug: function() {
-        if (debug) {
-          consoleLog('debug').apply(null, arguments);
-        }
-      }
-    };
   }];
 }
-
-// Utility functions (define these if not already available in your AngularJS app)
-function isDefined(value) {
-  return typeof value !== 'undefined';
-}
-
-function noop() {}
-
-function forEach(obj, iterator) {
-  if (typeof obj.forEach === 'function') {
-    obj.forEach(iterator);
-  } else {
-    for (var key in obj) {
-      if (obj.hasOwnProperty(key)) {
-        iterator(obj[key], key);
-      }
-    }
-  }
-}
-
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
  *     Any commits to this file should be reviewed with security in mind.  *
