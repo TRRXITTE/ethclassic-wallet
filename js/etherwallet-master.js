@@ -16383,123 +16383,93 @@ function $LocationProvider() {
  * Use the `$logProvider` to configure how the application logs messages
  */
 function $LogProvider() {
-  var debug = true,
-      self = this;
+  var debug = true;
 
   /**
    * @ngdoc method
    * @name $logProvider#debugEnabled
    * @description
-   * @param {boolean=} flag enable or disable debug level messages
-   * @returns {*} current value if used as getter or itself (chaining) if used as setter
+   * @param {boolean=} flag Enable or disable debug level messages
+   * @returns {*} Current value if used as getter, or itself (chaining) if used as setter
    */
-  this.debugEnabled = function(flag) {
+  this.debugEnabled = function (flag) {
     if (isDefined(flag)) {
       debug = flag;
-    return this;
+      return this;
     } else {
       return debug;
     }
   };
 
-  this.$get = ['$window', function($window) {
-    return {
-      /**
-       * @ngdoc method
-       * @name $log#log
-       *
-       * @description
-       * Write a log message
-       */
-      log: consoleLog('log'),
-
-      /**
-       * @ngdoc method
-       * @name $log#info
-       *
-       * @description
-       * Write an information message
-       */
-      info: consoleLog('info'),
-
-      /**
-       * @ngdoc method
-       * @name $log#warn
-       *
-       * @description
-       * Write a warning message
-       */
-      warn: consoleLog('warn'),
-
-      /**
-       * @ngdoc method
-       * @name $log#error
-       *
-       * @description
-       * Write an error message
-       */
-      error: consoleLog('error'),
-
-      /**
-       * @ngdoc method
-       * @name $log#debug
-       *
-       * @description
-       * Write a debug message
-       */
-      debug: (function() {
-        var fn = consoleLog('debug');
-
-        return function() {
-          if (debug) {
-            fn.apply(self, arguments);
-          }
-        };
-      }())
-    };
+  this.$get = ['$window', function ($window) {
+    var console = $window.console || {};
 
     function formatError(arg) {
       if (arg instanceof Error) {
         if (arg.stack) {
-          arg = (arg.message && arg.stack.indexOf(arg.message) === -1)
-              ? 'Error: ' + arg.message + '\n' + arg.stack
-              : arg.stack;
+          return (arg.message && arg.stack.indexOf(arg.message) === -1)
+            ? 'Error: ' + arg.message + '\n' + arg.stack
+            : arg.stack;
         } else if (arg.sourceURL) {
-          arg = arg.message + '\n' + arg.sourceURL + ':' + arg.line;
+          return arg.message + '\n' + arg.sourceURL + ':' + arg.line;
         }
       }
       return arg;
     }
 
     function consoleLog(type) {
-      var console = $window.console || {},
-          logFn = console[type] || console.log || noop,
-          hasApply = false;
+      var logFn = console[type] || console.log || noop;
+      var hasApply = false;
 
-      // Note: reading logFn.apply throws an error in IE11 in IE8 document mode.
-      // The reason behind this is that console.log has type "object" in IE8...
       try {
         hasApply = !!logFn.apply;
-      } catch (e) {}
+      } catch (e) { /* IE11 quirks */ }
 
       if (hasApply) {
-        return function() {
-          var args = [];
-          forEach(arguments, function(arg) {
-            args.push(formatError(arg));
-          });
+        return function () {
+          var args = Array.prototype.map.call(arguments, formatError);
           return logFn.apply(console, args);
         };
       }
 
-      // we are IE which either doesn't have window.console => this is noop and we do nothing,
-      // or we are IE where console.log doesn't have apply so we log at least first 2 args
-      return function(arg1, arg2) {
-        logFn(arg1, arg2 == null ? '' : arg2);
+      return function (arg1, arg2) {
+        logFn(arg1, arg2 != null ? arg2 : '');
       };
     }
+
+    return {
+      log: consoleLog('log'),
+      info: consoleLog('info'),
+      warn: consoleLog('warn'),
+      error: consoleLog('error'),
+      debug: function () {
+        if (debug) {
+          consoleLog('debug').apply(null, arguments);
+        }
+      }
+    };
   }];
 }
+
+// Utility functions (provide these if not using AngularJS core)
+function isDefined(value) {
+  return typeof value !== 'undefined';
+}
+
+function noop() {}
+
+function forEach(obj, iterator) {
+  if (Array.isArray(obj)) {
+    obj.forEach(iterator);
+  } else {
+    for (var key in obj) {
+      if (obj.hasOwnProperty(key)) {
+        iterator(obj[key], key);
+      }
+    }
+  }
+}
+
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
  *     Any commits to this file should be reviewed with security in mind.  *
