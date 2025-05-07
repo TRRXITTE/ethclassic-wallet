@@ -42,36 +42,54 @@ ajaxReq.getBalance = function(addr, callback) {
  * Replaces trace_call with eth_call and eth_estimateGas due to unavailable trace module
  * Fixes 415 Unsupported Media Type by setting Content-Type: application/json
  */
+/**
+ * Updated for Geth 1.10.26 on TRRXITTE Ethereum (ETX, networkid: 45545, chainId: 0xb1e9)
+ * Compatible with Gastracker and Etherhub via dynamic SERVERURL
+ * Replaces trace_call with eth_call and eth_estimateGas due to unavailable trace module
+ * Fixes BigNumber and 'The field v must have byte length of 1' errors with robust validation
+ * Updated chainId to 0xb1e9 (45577)
+ */
 ajaxReq.getTransactionData = function(addr, callback) {
   var response = { error: false, msg: '', data: { address: addr, balance: '', gasprice: '', nonce: '' } };
+  // Validate address format
+  if (!addr || !/^0x[0-9a-fA-F]{40}$/.test(addr)) {
+      console.error('getTransactionData: Invalid address format', addr);
+      callback({ error: true, msg: 'Invalid address: Must be 40-character hex string', data: '' });
+      return;
+  }
   var reqObj = [
       { "id": 135, "jsonrpc": "2.0", "method": "eth_getBalance", "params": [addr, 'latest'] },
       { "id": 136, "jsonrpc": "2.0", "method": "eth_gasPrice", "params": [] },
       { "id": 137, "jsonrpc": "2.0", "method": "eth_getTransactionCount", "params": [addr, 'latest'] }
   ];
   var config = {
-      headers: {
-          'Content-Type': 'application/json'
-      }
+      headers: { 'Content-Type': 'application/json' }
   };
   console.log('getTransactionData request:', { url: this.SERVERURL, data: reqObj });
   this.http.post(this.SERVERURL, JSON.stringify(reqObj), config).then(function(resp) {
-      console.log('getTransactionData response:', resp);
+      console.log('getTransactionData raw response:', JSON.stringify(resp, null, 2));
       var data = resp.data;
       if (!Array.isArray(data) || data.length !== 3) {
+          console.error('getTransactionData: Invalid response format', data);
           callback({ error: true, msg: 'Invalid RPC response: Expected 3 results', data: '' });
           return;
       }
       for (var i in data) {
-          if (data[i].error || typeof data[i].result !== 'string') {
-              callback({ error: true, msg: data[i].error?.message || 'RPC method failed: Invalid result', data: '' });
+          if (data[i].error) {
+              console.error('getTransactionData: RPC error for index', i, data[i].error);
+              callback({ error: true, msg: data[i].error.message || 'RPC method failed', data: '' });
+              return;
+          }
+          if (!data[i].result || typeof data[i].result !== 'string' || !/^0x[0-9a-fA-F]*$/.test(data[i].result)) {
+              console.error('getTransactionData: Invalid result for index', i, data[i]);
+              callback({ error: true, msg: 'RPC method failed: Invalid or missing result', data: '' });
               return;
           }
       }
       try {
-          response.data.balance = new BigNumber(data[0].result).toString(10); // Convert balance to decimal string
-          response.data.gasprice = data[1].result; // Hex string
-          response.data.nonce = data[2].result; // Hex string
+          response.data.balance = new BigNumber(data[0].result).toString(10);
+          response.data.gasprice = data[1].result;
+          response.data.nonce = data[2].result;
           callback(response);
       } catch (e) {
           console.error('getTransactionData parsing error:', e);
@@ -79,21 +97,20 @@ ajaxReq.getTransactionData = function(addr, callback) {
       }
   }, function(err) {
       console.error('getTransactionData error:', err);
-      var msg = err.status === 415 ? 'Unsupported Media Type: Ensure Content-Type is application/json' : 'Connection error: Unable to reach RPC';
+      var msg = err.status === 415 ? 'Unsupported Media Type: Ensure Content-Type is application/json' :
+                err.status ? `HTTP error ${err.status}: ${err.statusText}` : 'Connection error: Unable to reach RPC';
       callback({ error: true, msg: msg, data: '' });
   });
 };
 
 ajaxReq.sendRawTx = function(rawTx, callback) {
-  var config = {
-      headers: {
-          'Content-Type': 'application/json'
-      }
-  };
+  var config = { headers: { 'Content-Type': 'application/json' } };
+  console.log('sendRawTx request:', { method: 'eth_sendRawTransaction', params: [rawTx] });
   this.post({
       "method": "eth_sendRawTransaction",
       "params": [rawTx]
   }, function(resp) {
+      console.log('sendRawTx response:', JSON.stringify(resp, null, 2));
       if (resp.error) {
           callback({ error: true, msg: resp.error.message || 'Failed to send transaction', data: '' });
       } else {
@@ -103,12 +120,8 @@ ajaxReq.sendRawTx = function(rawTx, callback) {
 };
 
 ajaxReq.getEstimatedGas = function(txobj, callback) {
-  txobj.chainId = '0xb1d9'; // TRRXITTE chainId (45545)
-  var config = {
-      headers: {
-          'Content-Type': 'application/json'
-      }
-  };
+  txobj.chainId = '0xb1e9'; // TRRXITTE chainId (45577)
+  var config = { headers: { 'Content-Type': 'application/json' } };
   this.post({
       "method": "eth_estimateGas",
       "params": [txobj]
@@ -122,12 +135,8 @@ ajaxReq.getEstimatedGas = function(txobj, callback) {
 };
 
 ajaxReq.getEthCall = function(txobj, callback) {
-  txobj.chainId = '0xb1d9'; // TRRXITTE chainId (45545)
-  var config = {
-      headers: {
-          'Content-Type': 'application/json'
-      }
-  };
+  txobj.chainId = '0xb1e9'; // TRRXITTE chainId (45577)
+  var config = { headers: { 'Content-Type': 'application/json' } };
   this.post({
       "method": "eth_call",
       "params": [txobj, "latest"]
@@ -141,15 +150,10 @@ ajaxReq.getEthCall = function(txobj, callback) {
 };
 
 ajaxReq.getTraceCall = function(txobj, callback) {
-  txobj.chainId = '0xb1d9'; // TRRXITTE chainId (45545)
+  txobj.chainId = '0xb1e9'; // TRRXITTE chainId (45577)
   var result = { output: null, gasUsed: null, error: null };
-  var config = {
-      headers: {
-          'Content-Type': 'application/json'
-      }
-  };
+  var config = { headers: { 'Content-Type': 'application/json' } };
 
-  // Step 1: Simulate execution with eth_call
   this.post({
       "method": "eth_call",
       "params": [txobj, "latest"]
@@ -164,7 +168,6 @@ ajaxReq.getTraceCall = function(txobj, callback) {
       }
       result.output = callResp.data.result;
 
-      // Step 2: Estimate gas with eth_estimateGas
       ajaxReq.post({
           "method": "eth_estimateGas",
           "params": [txobj]
@@ -175,16 +178,15 @@ ajaxReq.getTraceCall = function(txobj, callback) {
               result.gasUsed = gasResp.data.result;
           }
 
-          // Return combined result
           callback({
               error: result.error !== null,
               msg: result.error || 'Simulated transaction successfully',
               data: {
-                  output: result.output, // eth_call result (e.g., return data)
-                  gasUsed: result.gasUsed, // eth_estimateGas result
-                  stateDiff: null, // Not available without trace module
-                  trace: null, // Not available without trace module
-                  vmTrace: null // Not available without trace module
+                  output: result.output,
+                  gasUsed: result.gasUsed,
+                  stateDiff: null,
+                  trace: null,
+                  vmTrace: null
               }
           });
       }, config);
@@ -195,13 +197,11 @@ ajaxReq.queuePost = function() {
   var data = this.pendingPosts[0].data;
   var callback = this.pendingPosts[0].callback;
   var config = this.pendingPosts[0].config || {
-      headers: {
-          'Content-Type': 'application/json'
-      }
+      headers: { 'Content-Type': 'application/json' }
   };
   console.log('queuePost request:', { url: this.SERVERURL, data: data });
   this.http.post(this.SERVERURL, JSON.stringify(data), config).then(function(resp) {
-      console.log('queuePost response:', resp);
+      console.log('queuePost response:', JSON.stringify(resp, null, 2));
       callback(resp);
       ajaxReq.pendingPosts.splice(0, 1);
       if (ajaxReq.pendingPosts.length > 0) {
@@ -209,7 +209,8 @@ ajaxReq.queuePost = function() {
       }
   }, function(err) {
       console.error('queuePost error:', err);
-      var msg = err.status === 415 ? 'Unsupported Media Type: Ensure Content-Type is application/json' : 'Connection error: Unable to reach RPC';
+      var msg = err.status === 415 ? 'Unsupported Media Type: Ensure Content-Type is application/json' :
+                err.status ? `HTTP error ${err.status}: ${err.statusText}` : 'Connection error: Unable to reach RPC';
       callback({ error: true, msg: msg, data: '' });
       ajaxReq.pendingPosts.splice(0, 1);
       if (ajaxReq.pendingPosts.length > 0) {
@@ -219,15 +220,13 @@ ajaxReq.queuePost = function() {
 };
 
 ajaxReq.post = function(data, callback, config) {
-  data.id = Math.floor(Math.random() * 10000) + 100; // Random ID for JSON-RPC
+  data.id = Math.floor(Math.random() * 10000) + 100;
   data.jsonrpc = "2.0";
   this.pendingPosts.push({
       data: data,
       callback: callback,
       config: config || {
-          headers: {
-              'Content-Type': 'application/json'
-          }
+          headers: { 'Content-Type': 'application/json' }
       }
   });
   if (this.pendingPosts.length === 1) {
@@ -236,19 +235,20 @@ ajaxReq.post = function(data, callback, config) {
 };
 
 ajaxReq.getETHvalue = function(callback) {
-  // Placeholder: Replace with TRRXITTE-specific price feed
-  var prefix = "etx";
-  this.http.get(this.COINMARKETCAPAPI + prefix).then(function(data) {
-      data = data['data']['price'];
+  var url = 'https://api.trrxitte.com/price/etx'; // Replace with actual TRRXITTE price feed
+  console.log('getETHvalue request:', url);
+  this.http.get(url).then(function(data) {
+      console.log('getETHvalue response:', data);
+      data = data['data']['price'] || data;
       var priceObj = {
-          usd: data['usd'].toFixed(6),
-          eur: data['eur'].toFixed(6),
-          btc: data['btc'].toFixed(6)
+          usd: parseFloat(data['usd'] || 0).toFixed(6),
+          eur: parseFloat(data['eur'] || 0).toFixed(6),
+          btc: parseFloat(data['btc'] || 0).toFixed(6)
       };
       callback({ error: false, data: priceObj });
   }, function(err) {
       console.error('getETHvalue error:', err);
-      callback({ error: true, msg: 'Failed to fetch ETX price (replace with TRRXITTE price feed)', data: {} });
+      callback({ error: true, msg: 'Failed to fetch ETX price (update with valid TRRXITTE price feed)', data: { usd: '0.000000', eur: '0.000000', btc: '0.000000' } });
   });
 };
 
