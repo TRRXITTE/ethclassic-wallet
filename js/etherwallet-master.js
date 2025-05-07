@@ -56,6 +56,13 @@ ajaxReq.getBalance = function(addr, callback) {
  * Fixes BigNumber, price feed, and 'The field v must have byte length of 1' errors
  * Normalizes transaction value to prevent leading zero errors
  */
+/**
+ * Updated for Geth 1.10.26 on TRRXITTE Ethereum (ETX, networkid: 45545, chainId: 0xb1e9)
+ * Compatible with Gastracker and Etherhub via dynamic SERVERURL
+ * Replaces trace_call with eth_call and eth_estimateGas due to unavailable trace module
+ * Fixes 'The field v must have byte length of 1' by validating rawTx in sendRawTx
+ * Retains fixes for price feed, chainId (0xb1e9), and transaction value normalization
+ */
 ajaxReq.getTransactionData = function(addr, callback) {
   var response = { error: false, msg: '', data: { address: addr, balance: '', gasprice: '', nonce: '' } };
   if (!addr || !/^0x[0-9a-fA-F]{40}$/.test(addr)) {
@@ -109,6 +116,12 @@ ajaxReq.getTransactionData = function(addr, callback) {
 
 ajaxReq.sendRawTx = function(rawTx, callback) {
   var config = { headers: { 'Content-Type': 'application/json' } };
+  // Validate rawTx format
+  if (!rawTx || !/^0x[0-9a-fA-F]+$/.test(rawTx)) {
+      console.error('sendRawTx: Invalid rawTx format', rawTx);
+      callback({ error: true, msg: 'Invalid raw transaction: Must be hex string', data: '' });
+      return;
+  }
   console.log('sendRawTx request:', { method: 'eth_sendRawTransaction', params: [rawTx] });
   this.post({
       "method": "eth_sendRawTransaction",
@@ -116,6 +129,7 @@ ajaxReq.sendRawTx = function(rawTx, callback) {
   }, function(resp) {
       console.log('sendRawTx response:', JSON.stringify(resp, null, 2));
       if (resp.error) {
+          console.error('sendRawTx error:', resp.error);
           callback({ error: true, msg: resp.error.message || 'Failed to send transaction', data: '' });
       } else {
           callback({ error: false, data: resp.data.result });
@@ -125,7 +139,6 @@ ajaxReq.sendRawTx = function(rawTx, callback) {
 
 ajaxReq.getEstimatedGas = function(txobj, callback) {
   txobj.chainId = '0xb1e9'; // TRRXITTE chainId (45577)
-  // Normalize value to remove leading zeros
   if (txobj.value && typeof txobj.value === 'string' && txobj.value.startsWith('0x')) {
       txobj.value = '0x' + parseInt(txobj.value, 16).toString(16);
   }
@@ -146,7 +159,6 @@ ajaxReq.getEstimatedGas = function(txobj, callback) {
 
 ajaxReq.getEthCall = function(txobj, callback) {
   txobj.chainId = '0xb1e9'; // TRRXITTE chainId (45577)
-  // Normalize value to remove leading zeros
   if (txobj.value && typeof txobj.value === 'string' && txobj.value.startsWith('0x')) {
       txobj.value = '0x' + parseInt(txobj.value, 16).toString(16);
   }
@@ -167,7 +179,6 @@ ajaxReq.getEthCall = function(txobj, callback) {
 
 ajaxReq.getTraceCall = function(txobj, callback) {
   txobj.chainId = '0xb1e9'; // TRRXITTE chainId (45577)
-  // Normalize value to remove leading zeros
   if (txobj.value && typeof txobj.value === 'string' && txobj.value.startsWith('0x')) {
       txobj.value = '0x' + parseInt(txobj.value, 16).toString(16);
   }
