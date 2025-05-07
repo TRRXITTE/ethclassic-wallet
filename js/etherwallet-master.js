@@ -42425,7 +42425,8 @@ function fixup_uint32 (x) {
   return ret
 }
 function scrub_vec (v) {
-  for (var i = 0; i < v.length; v++) {
+  for (var i = 0; i < v.length; i++) {
+
     v[i] = 0
   }
   return false
