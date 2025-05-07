@@ -16475,36 +16475,22 @@ function $LogProvider() {
       var console = $window.console || {},
           logFn = console[type] || console.log || noop,
           hasApply = false;
-// Check if logFn.apply is supported (some older IE versions may throw errors)
-let hasApply = false;
-try {
-  hasApply = typeof logFn.apply === 'function';
-} catch (e) {
-  hasApply = false;
-}
 
-if (hasApply) {
-  return function(...args) {
-    const formattedArgs = args.map(arg => formatError(arg));
-    return logFn.apply(console, formattedArgs);
-  };
-} else {
-  return function() {
-    const formattedArgs = [];
-    for (let i = 0; i < arguments.length; i++) {
-      formattedArgs.push(formatError(arguments[i]));
-    }
-    // Fallback: directly call logFn with limited arguments (e.g., for IE8)
-    switch (formattedArgs.length) {
-      case 0: return logFn();
-      case 1: return logFn(formattedArgs[0]);
-      case 2: return logFn(formattedArgs[0], formattedArgs[1]);
-      case 3: return logFn(formattedArgs[0], formattedArgs[1], formattedArgs[2]);
-      default: return logFn(formattedArgs.join(' '));
-    }
-  };
-}
+      // Note: reading logFn.apply throws an error in IE11 in IE8 document mode.
+      // The reason behind this is that console.log has type "object" in IE8...
+      try {
+        hasApply = !!logFn.apply;
+      } catch (e) {}
 
+      if (hasApply) {
+        return function() {
+          var args = [];
+          forEach(arguments, function(arg) {
+            args.push(formatError(arg));
+          });
+          return logFn.apply(console, args);
+        };
+      }
 
       // we are IE which either doesn't have window.console => this is noop and we do nothing,
       // or we are IE where console.log doesn't have apply so we log at least first 2 args
