@@ -49,9 +49,15 @@ ajaxReq.getBalance = function(addr, callback) {
  * Fixes BigNumber and 'The field v must have byte length of 1' errors with robust validation
  * Updated chainId to 0xb1e9 (45577)
  */
+/**
+ * Updated for Geth 1.10.26 on TRRXITTE Ethereum (ETX, networkid: 45545, chainId: 0xb1e9)
+ * Compatible with Gastracker and Etherhub via dynamic SERVERURL
+ * Replaces trace_call with eth_call and eth_estimateGas due to unavailable trace module
+ * Fixes BigNumber, price feed, and 'The field v must have byte length of 1' errors
+ * Normalizes transaction value to prevent leading zero errors
+ */
 ajaxReq.getTransactionData = function(addr, callback) {
   var response = { error: false, msg: '', data: { address: addr, balance: '', gasprice: '', nonce: '' } };
-  // Validate address format
   if (!addr || !/^0x[0-9a-fA-F]{40}$/.test(addr)) {
       console.error('getTransactionData: Invalid address format', addr);
       callback({ error: true, msg: 'Invalid address: Must be 40-character hex string', data: '' });
@@ -62,9 +68,7 @@ ajaxReq.getTransactionData = function(addr, callback) {
       { "id": 136, "jsonrpc": "2.0", "method": "eth_gasPrice", "params": [] },
       { "id": 137, "jsonrpc": "2.0", "method": "eth_getTransactionCount", "params": [addr, 'latest'] }
   ];
-  var config = {
-      headers: { 'Content-Type': 'application/json' }
-  };
+  var config = { headers: { 'Content-Type': 'application/json' } };
   console.log('getTransactionData request:', { url: this.SERVERURL, data: reqObj });
   this.http.post(this.SERVERURL, JSON.stringify(reqObj), config).then(function(resp) {
       console.log('getTransactionData raw response:', JSON.stringify(resp, null, 2));
@@ -121,11 +125,17 @@ ajaxReq.sendRawTx = function(rawTx, callback) {
 
 ajaxReq.getEstimatedGas = function(txobj, callback) {
   txobj.chainId = '0xb1e9'; // TRRXITTE chainId (45577)
+  // Normalize value to remove leading zeros
+  if (txobj.value && typeof txobj.value === 'string' && txobj.value.startsWith('0x')) {
+      txobj.value = '0x' + parseInt(txobj.value, 16).toString(16);
+  }
   var config = { headers: { 'Content-Type': 'application/json' } };
+  console.log('getEstimatedGas request:', { method: 'eth_estimateGas', params: [txobj] });
   this.post({
       "method": "eth_estimateGas",
       "params": [txobj]
   }, function(resp) {
+      console.log('getEstimatedGas response:', JSON.stringify(resp, null, 2));
       if (resp.error) {
           callback({ error: true, msg: resp.error.message || 'Failed to estimate gas', data: '' });
       } else {
@@ -136,11 +146,17 @@ ajaxReq.getEstimatedGas = function(txobj, callback) {
 
 ajaxReq.getEthCall = function(txobj, callback) {
   txobj.chainId = '0xb1e9'; // TRRXITTE chainId (45577)
+  // Normalize value to remove leading zeros
+  if (txobj.value && typeof txobj.value === 'string' && txobj.value.startsWith('0x')) {
+      txobj.value = '0x' + parseInt(txobj.value, 16).toString(16);
+  }
   var config = { headers: { 'Content-Type': 'application/json' } };
+  console.log('getEthCall request:', { method: 'eth_call', params: [txobj, 'latest'] });
   this.post({
       "method": "eth_call",
-      "params": [txobj, "latest"]
+      "params": [txobj, 'latest']
   }, function(resp) {
+      console.log('getEthCall response:', JSON.stringify(resp, null, 2));
       if (resp.error) {
           callback({ error: true, msg: resp.error.message || 'Failed to execute eth_call', data: '' });
       } else {
@@ -151,6 +167,10 @@ ajaxReq.getEthCall = function(txobj, callback) {
 
 ajaxReq.getTraceCall = function(txobj, callback) {
   txobj.chainId = '0xb1e9'; // TRRXITTE chainId (45577)
+  // Normalize value to remove leading zeros
+  if (txobj.value && typeof txobj.value === 'string' && txobj.value.startsWith('0x')) {
+      txobj.value = '0x' + parseInt(txobj.value, 16).toString(16);
+  }
   var result = { output: null, gasUsed: null, error: null };
   var config = { headers: { 'Content-Type': 'application/json' } };
 
@@ -239,11 +259,16 @@ ajaxReq.getETHvalue = function(callback) {
   console.log('getETHvalue request:', url);
   this.http.get(url).then(function(data) {
       console.log('getETHvalue response:', data);
-      data = data['data']['price'] || data;
+      var priceData = data['data'] && data['data']['price'] ? data['data']['price'] : null;
+      if (!priceData) {
+          console.error('getETHvalue: Invalid price data', data);
+          callback({ error: true, msg: 'Invalid price feed response', data: { usd: '0.000000', eur: '0.000000', btc: '0.000000' } });
+          return;
+      }
       var priceObj = {
-          usd: parseFloat(data['usd'] || 0).toFixed(6),
-          eur: parseFloat(data['eur'] || 0).toFixed(6),
-          btc: parseFloat(data['btc'] || 0).toFixed(6)
+          usd: parseFloat(priceData['usd'] || 0).toFixed(6),
+          eur: parseFloat(priceData['eur'] || 0).toFixed(6),
+          btc: parseFloat(priceData['btc'] || 0).toFixed(6)
       };
       callback({ error: false, data: priceObj });
   }, function(err) {
