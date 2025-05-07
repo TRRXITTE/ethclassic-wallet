@@ -99,7 +99,7 @@ ajaxReq.getTransactionData = function(addr, callback) {
           callback({ error: true, msg: 'Invalid RPC response: Expected 3 results', data: '' });
           return;
       }
-      for (var#####Handler for CORS preflight requests
+      for (varHandler for CORS preflight requests
       if (req.method === 'OPTIONS') {
           res.header('Access-Control-Allow-Origin', '*');
           res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
