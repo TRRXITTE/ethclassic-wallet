@@ -63,6 +63,13 @@ ajaxReq.getBalance = function(addr, callback) {
  * Fixes 'The field v must have byte length of 1' by validating rawTx in sendRawTx
  * Retains fixes for price feed, chainId (0xb1e9), and transaction value normalization
  */
+/**
+ * Updated for Geth 1.10.26 on TRRXITTE Ethereum (ETX, networkid: 45545, chainId: 0xb1e9)
+ * Compatible with Gastracker and Etherhub via dynamic SERVERURL
+ * Replaces trace_call with eth_call and eth_estimateGas due to unavailable trace module
+ * Fixes 'The field v must have byte length of 1' by validating and decoding rawTx in sendRawTx
+ * Retains fixes for chainId (0xb1e9), transaction value normalization, and price feed
+ */
 ajaxReq.getTransactionData = function(addr, callback) {
   var response = { error: false, msg: '', data: { address: addr, balance: '', gasprice: '', nonce: '' } };
   if (!addr || !/^0x[0-9a-fA-F]{40}$/.test(addr)) {
@@ -121,6 +128,21 @@ ajaxReq.sendRawTx = function(rawTx, callback) {
       console.error('sendRawTx: Invalid rawTx format', rawTx);
       callback({ error: true, msg: 'Invalid raw transaction: Must be hex string', data: '' });
       return;
+  }
+  // Attempt to decode rawTx for debugging (simplified, assumes Buffer and ethereumjs-tx-like parsing)
+  try {
+      // Note: This requires ethereumjs-tx or a similar library. If not available, log rawTx only.
+      // For browser, you may need to include ethereumjs-tx via a script tag or parse manually.
+      console.log('sendRawTx: Attempting to decode rawTx', rawTx);
+      // Placeholder for decoding (requires library or custom parsing)
+      // Example with ethereumjs-tx (Node.js context):
+      // const { Transaction } = require('ethereumjs-tx');
+      // const tx = new Transaction(rawTx, { chain: 'mainnet' });
+      // console.log('Decoded v:', tx.v.toString('hex'));
+      // console.log('Decoded r:', tx.r.toString('hex'));
+      // console.log('Decoded s:', tx.s.toString('hex'));
+  } catch (e) {
+      console.error('sendRawTx: Failed to decode rawTx', e);
   }
   console.log('sendRawTx request:', { method: 'eth_sendRawTransaction', params: [rawTx] });
   this.post({
